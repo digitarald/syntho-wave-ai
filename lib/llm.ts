@@ -62,7 +62,7 @@ export class Agents {
         this.apiKey = apiKey;
     }
 
-    private async fetchOpenaiAPI(messages: any[], maxTokens = 10) {
+    private async fetchOpenaiAPI(messages: any[], maxTokens = 25) {
         const apiUrl = "https://api.openai.com/v1/chat/completions";
         try {
             const response = await fetch(apiUrl, {
@@ -90,7 +90,7 @@ export class Agents {
         }
     }
 
-    public async reviewLatest(advisorId: string, transcript: string[]): Promise<TranscriptSummary> {
+    public async reviewLatest(advisorId: string, transcript: string[], lastRecommendation?: string): Promise<TranscriptSummary> {
         const advisor = advisors[advisorId];
         if (!advisor) {
             throw new Error(`Advisor not found: ${advisorId}`);
@@ -99,7 +99,7 @@ export class Agents {
             {
                 role: "system",
                 content: `
-                    You are an expert mentor that provides real-time feedback on a transcript from a live conversation. You are provided transcript snapshot. Your goal is to analyze the transcript for actionable feedback and follow-up guidance. You ent excellent listening skills, deep understanding of human behavior, and a knack for giving actionable advice that helps in the moment.
+                    You are an expert mentor that provides real-time feedback on a transcript from a live conversation. You are provided transcript snapshot and the last recommendation you provided. Your goal is to analyze the transcript for actionable feedback and follow-up guidance, so ${advisor.outcome}. You have excellent listening skills, deep understanding of human behavior, and a knack for giving actionable advice that helps in the moment.
 
                     # Conversation Details
                     Context: Conversation is a ${advisor.conversation}.
@@ -118,20 +118,28 @@ export class Agents {
                     - If you find a mistake, point it out directly and provide a correction. Avoid socratic questioning or indirect feedback.
 
                     # Your Work Matters!
-                    If you provide good real-time mentoring, you will ${advisor.outcome}, and you will earn the Mentor Master badge. Good luck!
+                    If you provide the best real-time mentoring, you will ${advisor.outcome}, and you will earn the Mentor Master badge. Good luck!
                 `.replace(/\n\s+/g, "\n"),
 
                 // Step 2: For the LAST LINE, determine the subtext behind it.Look for clues such as tone, emphasis, irony, sarcasm, humor, or deception.Identify the hidden or implied messages that the speakers are trying to convey or conceal.If the LAST LINE has a hidden or implied meaning, summarize it as actionable insight(10 words maximum), otherwise skip this step.
             },
             {
                 role: "user",
-                content: `# SUMMARY\n${transcript.slice(0, transcript.length - 1).join("\n")}`,
-            },
-            {
-                role: "user",
-                content: `# LAST LINE\n${transcript[transcript.length - 1]}`
+                content: `# PREVIOUS CONVERSATION\n${transcript.slice(0, transcript.length - 1).join("\n")}`,
             }
         ];
+
+        // Add before last entry
+        if (lastRecommendation) {
+            messages.push({
+                role: "user",
+                content: `# YOUR PREVIOUS RECOMMENDATION\n${lastRecommendation}`
+            });
+        }
+        messages.push({
+            role: "user",
+            content: `# LAST LINE\n${transcript[transcript.length - 1]}`
+        });
 
         const response = await this.fetchOpenaiAPI(messages, 500);
         const message = JSON.parse(response.choices[0].message.content);

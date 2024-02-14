@@ -4,7 +4,11 @@ import { Agents, advisorList, TranscriptSummary } from "../lib/llm";
 import { transcript as simulation } from "../lib/simulate2";
 import { FaPlay, FaPause, FaCog, FaMicrophone, FaRobot } from "react-icons/fa";
 
-const agents = new Agents(process.env.NEXT_PUBLIC_OPENAI_API_KEY || "");
+const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY || window.prompt("Please enter your API key");
+if (!apiKey) {
+  throw new Error("API key is required");
+}
+const agents = new Agents(apiKey);
 
 interface Transcript {
   text: string;
@@ -17,6 +21,7 @@ export default function Home() {
   const [simulationRunning, setSimulationRunning] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState("");
   const [advisor, setAdvisor] = useState(advisorList[0]);
+  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
 
   const addTranscript = async (text: string) => {
     const newTranscript: Transcript = {
@@ -25,11 +30,17 @@ export default function Home() {
     };
     setTranscripts((prev) => [...prev, newTranscript]);
 
+    // find latest analysis in transcripts
+    const lastAnalysis = transcripts
+      .toReversed()
+      .find((transcript) => transcript.analysis)?.analysis;
+
     agents
-      .reviewLatest(advisor, [
-        ...transcripts.map((transcript) => transcript.text),
-        text,
-      ])
+      .reviewLatest(
+        advisor,
+        [...transcripts.map((transcript) => transcript.text), text],
+        lastAnalysis?.recommendation
+      )
       .then((analysis) => {
         setTranscripts((prev) => {
           return prev.map((transcript) => {
@@ -113,57 +124,69 @@ export default function Home() {
     };
   }, [TTSRunning, transcripts]);
 
+  let lastSpeaker = 0;
+
   return (
     <>
-      <main className="flex-grow flex items-center justify-center p-1 overflow-y-auto bg-black">
-        <div>
-          <div className="flex-row-reverse">
-            {transcripts.map((transcript, index) => (
-              <div
-                key={index}
-                className={
-                  "flex m-1 rounded-lg text-gray-900 " +
-                  (transcript.analysis
-                    ? transcript.analysis?.speaker == 1
-                      ? "bg-blue-100"
-                      : "bg-green-100"
-                    : "bg-gray-100")
-                }
-              >
-                <div className="italic text-lg p-2 w-1/3">
-                  {transcript.text}
-                </div>
-                <div className="text-black text-xl bg-white leading-tight p-2 px-4 w-2/3">
-                  {transcript.analysis ? (
-                    <>
-                      <div className="text-gray-600">
-                        {transcript.analysis.insight}
-                      </div>
-                      <div className="text-red-900 font-semibold">
-                        {transcript.analysis.recommendation}
-                      </div>
-                    </>
-                  ) : (
-                    "..."
-                  )}
-                </div>
-              </div>
-            ))}
+      <main className="flex-grow flex flex-row items-stretch justify-stretch p-1 overflow-y-auto">
+        <div className="justify-end leading-loose w-1/2 mx-4 my-6 shadow-md rounded-lg bg-white p-4">
+          <div className="text-gray-500">
+            {TTSRunning || simulationRunning ? (
+              <FaMicrophone className="animate-pulse inline ease-in-out duration-75" />
+            ) : (
+              <span className="flex items-center text-gray-300">
+                <span className="font-bold uppercase">Ready! Set!</span>{" "}
+                <FaMicrophone className="ml-2 inline" />
+              </span>
+            )}
+            {interimTranscript}
           </div>
-          <div className="text-3xl text-gray-500">{interimTranscript}</div>
-          {(TTSRunning || simulationRunning) ? (
-            <div className="text-3xl text-gray-500">
-              <FaMicrophone className="animate-pulse ease-in-out duration-75" />
-            </div>
-          ) : (
-            <div className="text-5xl flex items-center text-gray-300">
-              <span className="font-bold uppercase">Ready! Set!</span>{" "}
-              <FaMicrophone className="ml-2 inline" />
-            </div>
-          )}
+          {transcripts.toReversed().map((transcript, index) => {
+            const speakerChanged = transcript.analysis?.speaker !== lastSpeaker;
+            lastSpeaker = transcript.analysis?.speaker || 0;
+            return (
+              <span
+                key={`text-${index}`}
+                className={`mr-2 transition-colors ${
+                  speakerChanged ? "block " : "inline-block "
+                } ${
+                  transcript.analysis
+                    ? transcript.analysis?.speaker == 1
+                      ? "text-blue-900 "
+                      : "text-green-900 "
+                    : "text-gray-700 "
+                } ${index === 0 ? "font-semibold " : ""} ${
+                  highlightedIndex === index ? "bg-yellow-200 " : ""
+                }`}
+                onMouseEnter={() => setHighlightedIndex(index)}
+                onMouseLeave={() => setHighlightedIndex(null)}
+              >
+                {transcript.text}
+              </span>
+            );
+          })}
+        </div>
+        <div className="px-4 py-8 w-1/2">
+          {transcripts.toReversed().map((transcript, index) => {
+            if (!transcript.analysis?.recommendation) {
+              return;
+            }
+            return (
+              <div
+                className={`text-lg px-2 py-1 first:bg-white first:text-xl transition-colors ${
+                  highlightedIndex === index ? "bg-yellow-200" : ""
+                }`}
+                key={`analysis-${index}`}
+                onMouseEnter={() => setHighlightedIndex(index)}
+                onMouseLeave={() => setHighlightedIndex(null)}
+              >
+                {transcript.analysis?.recommendation}
+              </div>
+            );
+          })}
         </div>
       </main>
-      <nav className="bg-white shadow-md p-2 flex justify-around">
+      <nav className="bg-white border-t-2 p-2 flex justify-around">
         <button
           className={`flex items-center rounded-md px-3 py-1 ${
             !TTSRunning ? "" : "bg-red-400 animate-pulse ease-in-out	duration-75"
