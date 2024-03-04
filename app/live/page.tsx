@@ -81,9 +81,11 @@ export default function Home() {
       if ("SpeechRecognition" in window) {
         recognition = new window.SpeechRecognition();
       } else if ("webkitSpeechRecognition" in window) {
+        // @ts-ignore
         recognition = new window.webkitSpeechRecognition();
-      } else {
-        console.error("SpeechRecognition is not supported in this browser");
+      }
+      if (!recognition) {
+        console.error("SpeechRecognition not available");
         return;
       }
       recognition.lang = "en-US";
