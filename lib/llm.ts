@@ -57,12 +57,17 @@ export const advisorList = Object.keys(advisors);
 
 export class Agents {
     private apiKey: string;
+    private model: string;
 
-    constructor(apiKey: string) {
+    constructor(apiKey: string, model: string) {
         this.apiKey = apiKey;
+        this.model = model;
+        console.log("OpenAI API Key:", this.apiKey, "Model:", this.model);
     }
 
     private async fetchOpenaiAPI(messages: any[], maxTokens = 25) {
+        console.log("fetchOpenaiAPI");
+
         const apiUrl = "https://api.openai.com/v1/chat/completions";
         try {
             const response = await fetch(apiUrl, {
@@ -72,7 +77,7 @@ export class Agents {
                     Authorization: `Bearer ${this.apiKey}`,
                 },
                 body: JSON.stringify({
-                    model: "gpt-3.5-turbo-0125",
+                    model: this.model,
                     response_format: { "type": "json_object" },
                     max_tokens: maxTokens,
                     messages: messages,
