@@ -4,6 +4,7 @@ import { Agents, advisorList, TranscriptSummary } from "../../lib/llm";
 import { transcript as simulation } from "../../lib/simulate2";
 import { FaPlay, FaPause, FaCog, FaMicrophone, FaRobot } from "react-icons/fa";
 import { useConfig } from "@/lib/configContext";
+import { redirect } from "next/navigation";
 
 interface Transcript {
   text: string;
@@ -12,6 +13,13 @@ interface Transcript {
 
 export default function Home() {
   const { openaiApiKey, model } = useConfig();
+
+  // redirect back when openaiApiKey or model is not set
+  useEffect(() => {
+    if (!openaiApiKey || !model) {
+      redirect("/");
+    }
+  }, [openaiApiKey, model]);
 
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
   const [TTSRunning, setTTSRunning] = useState(false);

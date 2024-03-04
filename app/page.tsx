@@ -24,10 +24,11 @@ const IndexPage = () => {
       <div className="w-full max-w-md">
         <h1 className="mb-4 font-bold text-3xl text-center">SynthoWave</h1>
         <div className="bg-white shadow-md mb-4 px-8 pt-6 pb-8 rounded">
-          <Link href="/live">
-            <a className="block bg-blue-500 px-4 py-2 rounded text-center text-white text-xl">
-              Start Live Session
-            </a>
+          <Link
+            href="/live"
+            className="block bg-blue-500 px-4 py-2 rounded text-center text-white text-xl"
+          >
+            Start Live Session
           </Link>
         </div>
         <form className="bg-white shadow-md rounded">
