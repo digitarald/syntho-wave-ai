@@ -65,10 +65,29 @@ export class Agents {
         console.log("OpenAI API Key:", this.apiKey, "Model:", this.model);
     }
 
-    private async fetchOpenaiAPI(messages: any[], maxTokens = 25) {
-        console.log("fetchOpenaiAPI");
+    static async fetchModels(apiKey: string): Promise<string[]> {
+        const response = await fetch(
+            `https://${apiKey.startsWith("sk-")
+                ? "api.openai.com"
+                : "api.together.xyz"
+            }/v1/models`,
+            {
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                },
+            }
+        );
+        const data = await response.json();
+        return (data.data || data)
+            .map((model: any) => model.id)
+            .filter((id: string) => /gpt|mixtral|llama-2/i.test(id));
+    }
 
-        const apiUrl = "https://api.openai.com/v1/chat/completions";
+    private async fetchOpenaiAPI(messages: any[], maxTokens = 25) {
+        const apiUrl = `${this.apiKey ? (this.apiKey.startsWith("sk-")
+            ? "https://api.openai.com"
+            : "https://api.together.xyz") : "http://192.168.4.41:1234"
+            }/v1/chat/completions`;
         try {
             const response = await fetch(apiUrl, {
                 method: "POST",
@@ -83,6 +102,7 @@ export class Agents {
                     messages: messages,
                 }),
             });
+            console.log(response);
 
             if (!response.ok) {
                 throw new Error(`Failed to fetch OpenAI API: ${response.status} ${response.statusText}`);
@@ -100,6 +120,7 @@ export class Agents {
         if (!advisor) {
             throw new Error(`Advisor not found: ${advisorId}`);
         }
+
         const messages = [
             {
                 role: "system",
@@ -114,8 +135,8 @@ export class Agents {
                     
                     # Think step-by-step:
                     Step 1: Read the summary and latest transcript line carefully and make informed assumptions about the speakers, context, subtext, open questions, and hidden messages.
-                    Step 2: Based on the LAST LINE and prior conversation provide constructive feedback (${advisor.feedback}) with specific and actionable guidance for follow-up (10 words maximum).
-                    Step 3: Return JSON (Typescript type: { speaker: number; recommendation?: string; };). Skip optional values if not applicable. Keep the JSON compact with no added whitespace or line breaks.
+                    Step 2: Based on the LAST LINE and prior conversation provide constructive feedback (${advisor.feedback}) with specific and actionable guidance for follow-up (MAXIMUM 10 words). If the feedback is not significantly different from the last recommendation, don't provide a new one.
+                    Step 3: Return JSON (Typescript type: { speaker: number; recommendation?: string; };). Skip optional values if not applicable. Make the JSON valid but compact with no added whitespace or line breaks.
 
                     # Remember
                     - Your feedback will be read by ${advisor.audience || advisor.participants[0]} as they are having the conversation, so it should be concise (easy to scan) and actionable (can be applied here and now).
@@ -125,16 +146,17 @@ export class Agents {
                     # Your Work Matters!
                     If you provide the best real-time mentoring, you will ${advisor.outcome}, and you will earn the Mentor Master badge. Good luck!
                 `.replace(/\n\s+/g, "\n"),
-
-                // Step 2: For the LAST LINE, determine the subtext behind it.Look for clues such as tone, emphasis, irony, sarcasm, humor, or deception.Identify the hidden or implied messages that the speakers are trying to convey or conceal.If the LAST LINE has a hidden or implied meaning, summarize it as actionable insight(10 words maximum), otherwise skip this step.
-            },
-            {
-                role: "user",
-                content: `# PREVIOUS CONVERSATION\n${transcript.slice(0, transcript.length - 1).join("\n")}`,
             }
         ];
 
-        // Add before last entry
+        // All lines but the last
+        const prevConversation = transcript.slice(0, -1);
+        if (prevConversation.length) {
+            messages.push({
+                role: "user",
+                content: `# PREVIOUS CONVERSATION\n${prevConversation.join("\n")}`
+            });
+        }
         if (lastRecommendation) {
             messages.push({
                 role: "user",
@@ -146,10 +168,18 @@ export class Agents {
             content: `# LAST LINE\n${transcript[transcript.length - 1]}`
         });
 
-        const response = await this.fetchOpenaiAPI(messages, 500);
-        const message = JSON.parse(response.choices[0].message.content);
-        console.log(message);
+        console.log(messages);
 
-        return (Array.isArray(message) ? message[0] : message) as TranscriptSummary;
+        const response = await this.fetchOpenaiAPI(messages, 500);
+        try {
+            const message = JSON.parse(response.choices[0].message.content);
+            return (Array.isArray(message) ? message[0] : message) as TranscriptSummary;
+        } catch (error) {
+            console.error("Error parsing OpenAI response:", error);
+        }
+        return {
+            speaker: 0,
+            recommendation: response.choices[0].message.content
+        } as TranscriptSummary;
     }
 }

@@ -1,13 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useConfig } from "../lib/configContext";
 import { FaArrowDown, FaArrowRight } from "react-icons/fa";
 import Link from "next/link";
+import { Agents } from "@/lib/llm";
+
+const cache: Record<string, string[]> = {};
 
 const IndexPage = () => {
   const { openaiApiKey, setOpenaiApiKey, model, setModel } = useConfig();
   const [isOpen, setIsOpen] = useState(false);
+  const [models, setModels] = useState<string[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      if (cache[openaiApiKey]) {
+        setModels(cache[openaiApiKey]);
+        return;
+      }
+
+      try {
+        const models = await Agents.fetchModels(openaiApiKey);
+        cache[openaiApiKey] = models;
+        setModels(models);
+      } catch (error) {
+        console.error("Error fetching models:", error);
+      }
+    })();
+  }, [openaiApiKey]);
 
   const handleOpenaiApiKeyChange = (
     event: React.ChangeEvent<HTMLInputElement>
@@ -55,7 +76,7 @@ const IndexPage = () => {
                   value={openaiApiKey}
                   onChange={handleOpenaiApiKeyChange}
                   required={true}
-                  pattern="sk-[a-zA-Z0-9]{48}"
+                  pattern="sk-[a-zA-Z0-9]{48}|[a-zA-Z0-9]{64}"
                   className="border-gray-300 invalid:bg-red-100 px-4 py-2 border rounded-md w-full"
                 />
               </div>
@@ -72,8 +93,11 @@ const IndexPage = () => {
                   <option value="" disabled>
                     Select One
                   </option>
-                  <option value="gpt-3.5-turbo-0125">gpt-3.5-turbo-0125</option>
-                  <option value="gpt-4-0125-preview">gpt-4-0125-preview</option>
+                  {models.map((model) => (
+                    <option key={model} value={model}>
+                      {model}
+                    </option>
+                  ))}
                 </select>
               </div>
             </>
